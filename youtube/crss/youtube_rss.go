@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"errors"
 	"strings"
 )
 
@@ -60,6 +61,10 @@ func (YRSSGetter) GetRSSLinkByLink(url string) (string, error) {
 
 	pattern = regexp.MustCompile("channel-external-id=\"([a-z,A-Z,-,_,0-9]*)\"")
 	matched = pattern.FindString(string(body))
+	if len(matched)<22 {
+		return "", errors.New("Couldn't extract URL")
+	}
+		
 	matched = matched[21 : len(matched)-1]
 
 	// return link to RSS feed

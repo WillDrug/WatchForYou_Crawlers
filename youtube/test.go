@@ -1,19 +1,40 @@
+
+	// How to getRSS feed example
+	// ------------------------------------
+	//var reader interfaces.RSSGetter
+	//reader = rss.YRSSGetter{}
+	//rss_url, err := reader.GetRSSLinkByName("Tom Scott")
+	//if err != nil {
+	//	log.Fatal(err)
+	//	return
+	//}
+	//fmt.Println(rss_url)
+	
+// send
 package main
 
 import (
         "fmt"
         "log"
-        "os"
-        "strconv"
-        "strings"
 		"encoding/json"
 		       "math/rand"
         "github.com/streadway/amqp"
+		"./crss"
 )
 
-type Test struct{
-	Field string `json:"field"`
-	Another int `json:"another"`
+
+// #types
+type RPCRequest struct {
+	Parser      string	`json:"parser"`
+	RequestType	string	`json:"parsertype"`
+	Request     string	`json:"request"`
+	LastDelta   int		`json:"lastdelta"`
+	LastUpdate  int64	`json:"lastupdate"`
+}
+type RPCResponse struct {
+	Success bool `json:"updated"`
+	Message string `json:"message"`
+	Entries []crss.Entry	
 }
 
 func failOnError(err error, msg string) {
@@ -33,7 +54,7 @@ func randInt(min int, max int) int {
         return min + rand.Intn(max-min)
 }
 
-func fibonacciRPC(n Test) (res Test, err error) {
+func youtubeRPC(n RPCRequest) (res RPCResponse, err error) {
         conn, err := amqp.Dial("amqp://watchforyou:watchforyou@localhost:5672/")
         failOnError(err, "Failed to connect to RabbitMQ")
         defer conn.Close()
@@ -43,7 +64,7 @@ func fibonacciRPC(n Test) (res Test, err error) {
         defer ch.Close()
 
         q, err := ch.QueueDeclare(
-                "",    // name
+                "callback_q_lol",    // name
                 false, // durable
                 false, // delete when usused
                 true,  // exclusive
@@ -55,8 +76,8 @@ func fibonacciRPC(n Test) (res Test, err error) {
         msgs, err := ch.Consume(
                 q.Name, // queue
                 "",     // consumer
-                true,   // auto-ack
-                false,  // exclusive
+                false,   // auto-ack
+                true,  // exclusive
                 false,  // no-local
                 false,  // no-wait
                 nil,    // args
@@ -67,7 +88,7 @@ func fibonacciRPC(n Test) (res Test, err error) {
 		pub, _ := json.Marshal(n)
         err = ch.Publish(
                 "",          // exchange
-                "rpc_queue", // routing key
+                "youtube_rpc", // routing key
                 false,       // mandatory
                 false,       // immediate
                 amqp.Publishing{
@@ -79,30 +100,17 @@ func fibonacciRPC(n Test) (res Test, err error) {
         failOnError(err, "Failed to publish a message")
         for d := range msgs {
                 if corrId == d.CorrelationId {
-                        err = json.Unmarshal(d.Body, &res)
-                        failOnError(err, "Failed to convert body to integer")
+						err = json.Unmarshal(d.Body, &res)
+                        failOnError(err, "Failed to convert body")
                         break
                 }
         }
-
-        return
+        return res, nil
 }
 
 func main() {
-        res, err := fibonacciRPC(Test{"Strings are good", 5})
-        failOnError(err, "Failed to handle RPC request")
-
-        log.Printf(" [.] Got %d", res)
+	res, err := youtubeRPC(RPCRequest{"youtube","query","Some Channel",0,0})
+	failOnError(err, "Failed to handle RPC request")
+	log.Printf(" [.] Got %v", res)
 }
 
-func bodyFrom(args []string) int {
-        var s string
-        if (len(args) < 2) || os.Args[1] == "" {
-                s = "30"
-        } else {
-                s = strings.Join(args[1:], " ")
-        }
-        n, err := strconv.Atoi(s)
-        failOnError(err, "Failed to convert arg to integer")
-        return n
-}
