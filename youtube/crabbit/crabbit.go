@@ -33,7 +33,7 @@ func onError(err error, message string, sever bool) bool {
 
 
 
-func (rc RabbitConnector) Connect(cstr string) bool {
+func (rc *RabbitConnector) Connect(cstr string) bool {
 	var err error
 	// initializing #rabbitmq RPC interfaces TODO: move to separate package with deferred connection closing
 	log.Printf("Dialing %s", cstr)
@@ -43,17 +43,16 @@ func (rc RabbitConnector) Connect(cstr string) bool {
 	log.Printf("Creating a channel")
 	rc.ch, err = rc.conn.Channel()
 	onError(err, "Failed to open a channel", true)
-
 	return true
 }
 
-func (rc RabbitConnector) Disconnect() bool {
+func (rc *RabbitConnector) Disconnect() bool {
 	rc.conn.Close()
 	rc.ch.Close()
 	return true
 }
 
-func (rc RabbitConnector) DeclareAndConsume(qname string) bool {
+func (rc *RabbitConnector) DeclareAndConsume(qname string) bool {
 	var err error
 	
 	// #declare ing queue. Consumer always declares!
@@ -93,7 +92,7 @@ func (rc RabbitConnector) DeclareAndConsume(qname string) bool {
 	return true
 }
 
-func (rc RabbitConnector) Reply(pub []byte, d amqp.Delivery) error {
+func (rc *RabbitConnector) Reply(pub []byte, d amqp.Delivery) error {
 	return rc.ch.Publish(
 			"",        // exchange
 			d.ReplyTo, // routing key // is handled by sender.

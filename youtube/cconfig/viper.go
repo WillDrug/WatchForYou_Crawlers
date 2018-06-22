@@ -2,17 +2,18 @@ package cconfig
 
 import (
 	"github.com/spf13/viper"
+	"fmt"
 )
 
 func init() {
 	var err error
 	viper.SetConfigName("config") // name of config file (without extension)
 	viper.AddConfigPath(".") // local
-	viper.AddConfigPath("$HOME/host/WatchForYou/WatchForYou_Crawlers/youtube/cconfig") // TODO: delete. dev
+	viper.AddConfigPath("$HOME/host/WatchForYou/WatchForYou_Crawlers/youtube/cconfig/") // TODO: delete. dev
 	viper.AddConfigPath("/config/") // for future Dockerfile
 	err = viper.ReadInConfig() // Find and read the config file
 	if err != nil {
-		panic("Failed to initialize config storage... And it's a file!!! What?!")
+		panic(fmt.Sprintf("Failed to initialize config storage... And it's a file!!! What?!: %v", err))
 	}
 	
 	// #default -ing viper TODO: finish defaults where can
