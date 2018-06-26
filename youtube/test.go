@@ -19,7 +19,7 @@ import (
 		"encoding/json"
 		       "math/rand"
         "github.com/streadway/amqp"
-		"./crss"
+		"./cinterfaces"
 )
 
 
@@ -34,7 +34,7 @@ type RPCRequest struct {
 type RPCResponse struct {
 	Success bool `json:"updated"`
 	Message string `json:"message"`
-	Entries []crss.Entry	
+	Entries []cinterfaces.Entry	
 }
 
 func failOnError(err error, msg string) {

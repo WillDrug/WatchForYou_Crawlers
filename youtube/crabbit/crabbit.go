@@ -3,59 +3,43 @@ package crabbit
 import (
 	"github.com/streadway/amqp"
 	"log"
-	"fmt"
-//	"../cconfig" -- not needed to be a proper interface
-//	"../cinterfaces"
+//	"fmt"
+//	"../cconfig" // not needed to be a proper interface
+	"../cinterfaces"
 )
-//type Message amqp.Delivery
-
 
 
 type RabbitConnector struct {
 	conn *amqp.Connection
 	ch 	 *amqp.Channel
 	q	 amqp.Queue
-	Msgs <-chan amqp.Delivery
+	iMsgs <-chan amqp.Delivery
+	Msgs chan cinterfaces.Message
 }
 
-func onError(err error, message string, sever bool) bool {
-	if err != nil {
-		if sever {
-			log.Panic(fmt.Sprintf("Paniced while > %d < with > %d <", message, err))
-			return true
-		} else {
-			log.Panic(fmt.Sprintf("Fatal error while > %d < with > %d <", message, err))
-			return true
-		}
-	}
-	return false
-}
-
-
-
-func (rc *RabbitConnector) Connect(cstr string) bool {
+func (rc *RabbitConnector) Connect(cstr string) error {
 	var err error
-	// initializing #rabbitmq RPC interfaces TODO: move to separate package with deferred connection closing
+	
 	log.Printf("Dialing %s", cstr)
 	rc.conn, err = amqp.Dial(cstr)
-	onError(err, "Failed to connect to RabbitMQ", true)
+	if err != nil { return err }
 	
 	log.Printf("Creating a channel")
 	rc.ch, err = rc.conn.Channel()
-	onError(err, "Failed to open a channel", true)
-	return true
+	return err
 }
 
-func (rc *RabbitConnector) Disconnect() bool {
+func (rc *RabbitConnector) Disconnect() {
 	rc.conn.Close()
 	rc.ch.Close()
-	return true
 }
 
-func (rc *RabbitConnector) DeclareAndConsume(qname string) bool {
+func (rc *RabbitConnector) Consume(qname string) error {
+	//rc := &rrc
 	var err error
 	
 	// #declare ing queue. Consumer always declares!
+	
 	log.Printf("Declaring %s queue for RPC requests", qname)
 	rc.q, err = rc.ch.QueueDeclare(
 			qname, // name TODO: fix those configs, all of them, this is bollocks
@@ -65,7 +49,7 @@ func (rc *RabbitConnector) DeclareAndConsume(qname string) bool {
 			false,       // no-wait
 			nil,         // arguments
 	)
-	onError(err, "Failed to declare a queue", true)
+	if err != nil { return err }
 	
 	log.Printf("Setting Qos to 1 prefetch full") // TODO: configurable?
 	err = rc.ch.Qos(
@@ -73,10 +57,10 @@ func (rc *RabbitConnector) DeclareAndConsume(qname string) bool {
 			0,     // prefetch size
 			false, // global
 	)
-	onError(err, "Failed to set QoS", false)
+	if err != nil { return err }
 	
 	log.Printf("Starting a consumer channel")
-	rc.Msgs, err = rc.ch.Consume(
+	rc.iMsgs, err = rc.ch.Consume(
 			rc.q.Name, // queue
 			"",     // consumer
 			false,  // auto-ack
@@ -86,21 +70,44 @@ func (rc *RabbitConnector) DeclareAndConsume(qname string) bool {
 			nil,    // args
 	)
 	
-	
-	
-	onError(err, "Failed to register a consumer", true)
-	return true
+	return err
 }
 
-func (rc *RabbitConnector) Reply(pub []byte, d amqp.Delivery) error {
-	return rc.ch.Publish(
+// testing! TODO: review
+var replier map[string]amqp.Delivery
+
+func (rc *RabbitConnector) InboundMessages(workers int) chan cinterfaces.Message {
+	replier = make(map[string]amqp.Delivery)
+	if workers != 1 {
+		panic("Don't know how to handle more than 1 thread yet")
+	}
+	go func() {
+		for d := range rc.iMsgs {
+			replier[d.CorrelationId] = d
+			rc.Msgs<-cinterfaces.Message{d.Body, d.CorrelationId}
+		}
+	}()
+	return rc.Msgs
+}
+	
+
+func (rc *RabbitConnector) ReplyToMessage(pub []byte, msg cinterfaces.Message) error {
+	original := replier[msg.Context]
+	err := rc.ch.Publish(
 			"",        // exchange
-			d.ReplyTo, // routing key // is handled by sender.
+			original.ReplyTo, // routing key // is handled by sender.
 			false,     // mandatory
 			false,     // immediate
 			amqp.Publishing{
 					ContentType:   "application/json",
-					CorrelationId: d.CorrelationId, // CorrelationId is handled by sender.
+					CorrelationId: msg.Context, // CorrelationId is handled by sender.
 					Body:          pub,
 			})
+	if err != nil {
+		original.Ack(false)
+	} else {
+		original.Ack(true)
+	}	
+	delete(replier, msg.Context)
+	return err
 }

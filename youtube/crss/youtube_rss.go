@@ -8,6 +8,9 @@ import (
 	"regexp"
 	"errors"
 	"strings"
+	"github.com/mmcdole/gofeed"
+	"time"
+	"../cinterfaces"
 )
 
 type YRSSGetter struct{}
@@ -85,4 +88,43 @@ func getBody(url string) ([]byte, error) {
 	// close connection after function done
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
+}
+
+func (YRSSGetter) GetFeedUpdates(feedURI string, since time.Time) ([]cinterfaces.Entry, error) {
+	fp := gofeed.NewParser()
+	feed, err := fp.ParseURL(feedURI)
+	if err != nil {
+		return nil, err
+	}
+	//newEntries = make([]cinterfaces.Entry, 0)
+	var last int
+	last = 0
+	for en:=range feed.Items {
+		pub, err := time.Parse(time.RFC3339, feed.Items[en].Published)
+		if err != nil {
+			//panic(fmt.Sprintf("Error converting publish datetime (%V)!", err))
+			return nil, err
+		}
+		if pub.After(since) {
+			last=en
+		}
+	}
+	updates := make([]cinterfaces.Entry, last+1)
+	for en:=range updates {
+		updates[en].Title = feed.Items[en].Title
+		updates[en].Description = feed.Items[en].Description
+		updates[en].URL = feed.Items[en].Link
+		pub, err := time.Parse(time.RFC3339, feed.Items[en].Published)
+		if err != nil {
+			//panic(fmt.Sprintf("Error converting publish datetime (%V)!", err))
+			//return nil, err
+			continue // TODO: fix this
+		}
+		updates[en].Updated = pub.Unix()
+	}
+	return updates, nil
+}
+func (yr YRSSGetter)  GetFeedUpdatesWithPOSIX(feedURI string, since int64) ([]cinterfaces.Entry, error) {
+	time := time.Unix(since, 0)
+	return yr.GetFeedUpdates(feedURI, time)
 }

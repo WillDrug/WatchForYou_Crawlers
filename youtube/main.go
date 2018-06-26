@@ -3,7 +3,7 @@ import (
 	"fmt"
 	"log"
 	"encoding/json"
-	"github.com/streadway/amqp"
+//	"github.com/streadway/amqp"
 	"./cinterfaces"
 	"./crss"
 	"./cconfig"
@@ -39,29 +39,33 @@ type RPCRequest struct {
 type RPCResponse struct {
 	Success bool `json:"updated"`
 	Message string `json:"message"`
-	Entries []crss.Entry	
+	Entries []cinterfaces.Entry	
 }
 
 // #variables
 var cfg cinterfaces.ConfigLoader
-var cn crabbit.RabbitConnector
+var cn cinterfaces.Connection //crabbit.RabbitConnector
+var prs cinterfaces.RSSGetter
 
 // #init
 func init() {
+	// init cfg
 	cfg = cconfig.ConfigLoader{}
 	log.Printf("Initialized %s crawler", cfg.GetString("modulename"))
 }
 
 // #main
 func main() {
-	cn = crabbit.RabbitConnector{}
+	// initialize connection
+	cn = &crabbit.RabbitConnector{}
 	cn.Connect(cfg.GetString("rmqconn"))
-	cn.DeclareAndConsume(cfg.GetString("rmqqname"))
+	cn.Consume(cfg.GetString("rmqqname"))
 	// Be tidy
 	defer cn.Disconnect()
 
 	// Be weird
 	forever := make(chan bool)
+	
 	// GO!
 	go parseRPCRequest()
 	log.Printf(" [*] Awaiting RPC requests")
@@ -69,21 +73,20 @@ func main() {
 	<-forever
 }
 
-func ReturnAnswer(res RPCResponse, d amqp.Delivery) bool {
+func ReturnAnswer(res RPCResponse, d cinterfaces.Message) bool {
 	pub, err := json.Marshal(res)
 	if onError(err, "Failed to jsonify", false) {
 		return false
 	} // TODO : you can double down on error logs and exception handling	
 	// Publish response
-	err = cn.Reply(pub, d)
-	if !onError(err, "Failed to publish a message", false) {
-		d.Ack(false)
-	}
+	err = cn.ReplyToMessage(pub, d)
+	onError(err, "Failed to publish a message", false)
 	return true
 }
-func onAtomicError(err error, message string, d amqp.Delivery) bool {
+
+func onAtomicError(err error, message string, d cinterfaces.Message) bool {
 	if err != nil {
-		go ReturnAnswer(RPCResponse{false, message, make([]crss.Entry, 0)}, d)
+		go ReturnAnswer(RPCResponse{false, message, make([]cinterfaces.Entry, 0)}, d)
 		return true
 	}
 	return false
@@ -97,44 +100,44 @@ func parseRPCRequest() {
 	var req RPCRequest
 	var err error
 	var res RPCResponse
-	var getter cinterfaces.RSSGetter
-	getter = crss.YRSSGetter{}
-	
+	prs = crss.YRSSGetter{}
+	inbound := cn.InboundMessages(1)
 	// loop prefetched in channel
 	// inside there is GO lexem just if prefetch size changes
-	for d := range cn.Msgs {
+	for d := range inbound {
 		// Parse request into struct
 		log.Printf("Got me a message")
-		err = json.Unmarshal(d.Body, &req)
+		err = json.Unmarshal(d.Content, &req)
 		onAtomicError(err, "Failed to convert body to *RPCRequest", d)
 		log.Printf("Got me a %s request type %s", req.Request, req.RequestType) // TODO: MUST HAVE log-levels here
 		
 		// Get data.
 		// basing on request type, but actually can just run this:
-		// getter.GetRSSLinkUniversal()
+		// prs.GetRSSLinkUniversal()
+		
 		if req.Parser != "youtube" {
-			res = RPCResponse{false, "Wrong parser for message", make([]crss.Entry, 0)}
+			res = RPCResponse{false, "Wrong parser for message", make([]cinterfaces.Entry, 0)}
 		} else {
-			var entries []crss.Entry
+			var entries []cinterfaces.Entry
 			if req.RequestType == "query" { // TODO : change to config
-				url, err := getter.GetRSSLinkUniversal(req.Request)
+				url, err := prs.GetRSSLinkUniversal(req.Request)
 				if onAtomicError(err, "Failed to fetch RSS feed URL", d) {
 					continue
 				}
-				entries, err = crss.GetFeedUpdatesWithPOSIX(url, req.LastUpdate)
+				entries, err = prs.GetFeedUpdatesWithPOSIX(url, req.LastUpdate)
 				if onAtomicError(err, "Failed to fetch RSS feed from URL", d) {
 					continue
 				}
-				res = RPCResponse{true, "", make([]crss.Entry, 0)}
+				res = RPCResponse{true, "", make([]cinterfaces.Entry, 0)}
 			} else if req.RequestType == "URL" {
-				entries, err = crss.GetFeedUpdatesWithPOSIX(req.Request, req.LastUpdate)
+				entries, err = prs.GetFeedUpdatesWithPOSIX(req.Request, req.LastUpdate)
 				if onAtomicError(err, "Failed to fetch RSS feed from URL", d) {
 					continue
 				}
-				res = RPCResponse{true, "", make([]crss.Entry, 0)}
+				res = RPCResponse{true, "", make([]cinterfaces.Entry, 0)}
 			} else {
-				entries = make([]crss.Entry, 0)
-				res = RPCResponse{false, "Uncrecognized request type", make([]crss.Entry, 0)}
+				entries = make([]cinterfaces.Entry, 0)
+				res = RPCResponse{false, "Uncrecognized request type", make([]cinterfaces.Entry, 0)}
 			}
 			res.Entries = entries
 		}
