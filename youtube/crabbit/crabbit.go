@@ -3,7 +3,7 @@ package crabbit
 import (
 	"github.com/streadway/amqp"
 	"log"
-//	"fmt"
+	"fmt"
 //	"../cconfig" // not needed to be a proper interface
 	"../cinterfaces"
 )
@@ -83,11 +83,12 @@ func (rc *RabbitConnector) InboundMessages(workers int) chan cinterfaces.Message
 	}
 	go func() {
 		for d := range rc.iMsgs {
+			fmt.Printf("%#v", d)
 			replier[d.CorrelationId] = d
 			rc.Msgs<-cinterfaces.Message{d.Body, d.CorrelationId}
 		}
 	}()
-	return rc.Msgs
+	return &rc.Msgs
 }
 	
 

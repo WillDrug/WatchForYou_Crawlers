@@ -85,7 +85,8 @@ func youtubeRPC(n RPCRequest) (res RPCResponse, err error) {
         failOnError(err, "Failed to register a consumer")
 
         corrId := randomString(32)
-		pub, _ := json.Marshal(n)
+        pub, _ := json.Marshal(n)
+        //pub, _ := json.Marshal("{'no': 'yes'}")
         err = ch.Publish(
                 "",          // exchange
                 "youtube_rpc", // routing key
