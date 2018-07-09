@@ -1,3 +1,3 @@
 rmqconn: amqp://watchforyou:watchforyou@localhost:5672/
-rmqqname: youtube_rpc
+rmqqname: youtube
 modulename: youtube crawler

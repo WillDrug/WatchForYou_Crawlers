@@ -1,0 +1,2 @@
+connstring: amqp://watchforyou:watchforyou@localhost:5672/
+connpoint: youtube

@@ -89,7 +89,7 @@ func youtubeRPC(n RPCRequest) (res RPCResponse, err error) {
         //pub, _ := json.Marshal("{'no': 'yes'}")
         err = ch.Publish(
                 "",          // exchange
-                "youtube_rpc", // routing key
+                "youtube", // routing key
                 false,       // mandatory
                 false,       // immediate
                 amqp.Publishing{
