@@ -22,12 +22,13 @@ func init() {
 	cfg.SetDefaults(map[string]interface{}{
 		"connstring": "amqp://watchforyou:watchforyou@localhost:5672/",
 		"connpoint": "youtube",
+		"parsername": "youtube",
 	})
 	// init connector
-	conn = &wconnector.Connector{}
+	conn = &wconnector.HTTPConnector{}
 
 	// init parser
-	pname := cfg.GetString("connpoint")
+	pname := cfg.GetString("parsername")
 	mod := fmt.Sprintf("./wparsers/%v/%v.so", pname, pname)
 	plug, err := plugin.Open(mod)
 	if err != nil {

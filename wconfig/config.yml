@@ -1,2 +1,2 @@
-connstring: amqp://watchforyou:watchforyou@localhost:5672/
-connpoint: youtube
+connstring: http://127.0.0.1:8080/test # for rabbit: amqp://watchforyou:watchforyou@localhost:5672/
+connpoint: :8080 # you consume this # for rabbit: youtube
