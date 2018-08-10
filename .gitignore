@@ -41,4 +41,5 @@ tmtagsHistory
 *.sublime-workspace
 .bundle
 cmbenv
-.env
+.envmain.sublime-project
+main.sublime-workspace
